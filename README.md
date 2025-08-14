@@ -8,9 +8,9 @@ MATLAB implementations for constructing **continuous piecewise-linear (CPWL) δ-
   
 ## Repository Layout
 ```
-├── fbsd.m                 % FBSD implementation (solves minimal δ for fixed B using Gurobi)
-├── alphaforward.m         % α-Forward Heuristic (greedy, solver-free approach)
-├── runtime_experiments.m  % Experiments on sin(x)/x; plots time vs. B (FBSD) and time vs. δ (α-Forward)
+├── fixedBreakpointsDeltaApproximator.m                 % FBSD implementation (solves minimal δ for fixed B using Gurobi)
+├── alphaForwardHeuristc.m         % α-Forward Heuristic (greedy, solver-free approach)
+├── runtimeExperiments.m  % Experiments on sin(x)/x; plots time vs. B (FBSD) and time vs. δ (α-Forward)
 └── README.md              % Project documentation
 ```
 ## Requirements
