@@ -1,8 +1,7 @@
 MATLAB implementations for constructing **continuous piecewise-linear δ-approximations** of univariate functions:
 
 ## Algorithm Source
-
-- **Continuous Piecewise Linear δ-Approximations for Univariate Functions: Computing Minimal Breakpoint Systems**  
+**Continuous Piecewise Linear δ-Approximations for Univariate Functions: Computing Minimal Breakpoint Systems**  
   *Steffen Rebennack, Josef Kallrath*  
   URL: https://doi.org/10.1007/s10957-014-0687-3
   
