@@ -42,8 +42,6 @@ if R2_quad > R2_lin
 else
     p_fit = p1_lin;  fit_label_fbsd = sprintf('Linear fit (R^2=%.3f)',   R2_lin);
 end
-
-% Create a fine x-grid for smooth fit curve
 B_fine   = linspace(min(B_list), max(B_list), 300);
 yhat_fine = polyval(p_fit, B_fine);
 
@@ -73,88 +71,62 @@ for k = 1:numel(delta_list)
     end 
     time_af(k) = mean(t); 
 end
-% -------- Robust piecewise fit (auto split with spike detection) ----------
-% Sort δ descending so high-δ (flat) comes first
+
+tol = 0.02;  
+
 [delta_s, idx_s] = sort(delta_list, 'descend');
 time_s = time_af(idx_s);
 
-n = numel(delta_s);
+% Start from largest δ, find where values deviate > tol from initial mean
+candidates = [];
+for s = 2:numel(delta_s)-2  % leave at least 2 points for the tail
+    mean_hi = mean(time_s(1:s));
+    if abs(time_s(s+1) - mean_hi) > tol
+        break;  % deviation found
+    end
+    candidates = [candidates, s];
+end
 
-% 1) Estimate baseline from the top-N high-δ points
-Nbase = min(max(5, round(0.25*n)), n-4);   
-mu0   = mean(time_s(1:Nbase));
-sd0   = std(time_s(1:Nbase));
-kthr  = 3;                                
-
-% 2) First spike
-idx_spike = find(time_s(Nbase+1:end) > mu0 + kthr*sd0, 1, 'first');
-if ~isempty(idx_spike)
-    idx_spike = idx_spike + Nbase;          % convert to absolute index
-    search_max = max(idx_spike-1, 2);       % constant region cannot pass the spike
+if isempty(candidates)
+    split_idx = round(numel(delta_s)/2); % fallback
 else
-    search_max = n-3;
+    split_idx = candidates(end);  % last index in flat region
 end
 
-best.SSE = inf; best.idxSplit = NaN; best.model = ''; best.p = []; best.R2 = NaN;
+% Split δ value for reporting
+delta_star = delta_s(split_idx);
 
-for s = 2 : min(search_max, n-3)   % at least 2 high-δ points, 3 low-δ points
-    % High-δ constant segment
-    y_hi   = time_s(1:s);
-    cval   = mean(y_hi);
-    SSE_hi = sum( (y_hi - cval).^2 );
+% --- High-δ constant segment ---
+delta_hi = linspace(delta_s(1), delta_star, 200);
+cval = mean(time_s(1:split_idx));
+y_hi = cval * ones(size(delta_hi));
 
-    % Low-δ candidate fits
-    x_lo   = delta_s(s+1:end);
-    y_lo   = time_s(s+1:end);
-    SST_lo = sum( (y_lo - mean(y_lo)).^2 );
+% --- Low-δ linear fit ---
+x_lo = delta_s(split_idx+1:end);
+y_lo = time_s(split_idx+1:end);
 
-    % Linear tail
-    p_lin = polyfit(x_lo, y_lo, 1);
-    yhat_lin = polyval(p_lin, x_lo);
-    SSE_lin = sum((y_lo - yhat_lin).^2);
+[x_lo_asc, ord] = sort(x_lo, 'ascend');
+y_lo_asc = y_lo(ord);
 
-    % Quadratic tail
-    p_quad = polyfit(x_lo, y_lo, 2);
-    yhat_quad = polyval(p_quad, x_lo);
-    SSE_quad = sum((y_lo - yhat_quad).^2);
+p_lin = polyfit(x_lo_asc, y_lo_asc, 1);
+delta_lo = linspace(min(x_lo_asc), max(x_lo_asc), 200);
+y_lo_fit = polyval(p_lin, delta_lo);
 
-    if SSE_lin <= SSE_quad
-        SSE_lo = SSE_lin;  p_lo = p_lin;  model_lo = 'linear';
-        R2_lo  = 1 - SSE_lin / max(SST_lo, eps);
-    else
-        SSE_lo = SSE_quad; p_lo = p_quad; model_lo = 'quadratic';
-        R2_lo  = 1 - SSE_quad / max(SST_lo, eps);
-    end
+% R² for tail
+SSE = sum((y_lo_asc - polyval(p_lin, x_lo_asc)).^2);
+SST = sum((y_lo_asc - mean(y_lo_asc)).^2);
+R2_tail = 1 - SSE / max(SST, eps);
 
-    SSE_tot = SSE_hi + SSE_lo;
-    if SSE_tot < best.SSE
-        best.SSE      = SSE_tot;
-        best.idxSplit = s;
-        best.cval     = cval;
-        best.model    = model_lo;
-        best.p        = p_lo;
-        best.R2       = R2_lo;
-    end
-end
-
-s = best.idxSplit;
-delta_star = 0.5*(delta_s(s) + delta_s(s+1));  
-
-% High-δ constant segment
-delta_hi = linspace(delta_s(1), delta_s(s), 200);
-y_hi     = best.cval * ones(size(delta_hi));
-
-% Low-δ fitted segment
-delta_lo = linspace(delta_s(s+1), delta_s(end), 200);
-y_lo     = polyval(best.p, delta_lo);
-
-% Plot (markers only + smooth piecewise curve)
-figure('Name','Alpha-forward runtime scaling (piecewise)','Color','w');
+% --- Plot ---
+figure('Name','Auto piecewise const + linear','Color','w');
 plot(delta_list, time_af, 'ks', 'MarkerFaceColor','k', 'MarkerSize',4); hold on; grid on;
 plot(delta_hi, y_hi, 'r-', 'LineWidth', 2);
-plot(delta_lo, y_lo, 'r-', 'LineWidth', 2);
-set(gca,'XDir','reverse');  xlabel('Precision \delta'); ylabel('Computation time (s)');
+plot(delta_lo, y_lo_fit, 'r-', 'LineWidth', 2);
+set(gca,'XDir','reverse');
+xlabel('Precision \delta'); ylabel('Computation time (s)');
 legend('Measured time', ...
-       sprintf('Piecewise: const (high \\delta) + %s (low \\delta, R^2=%.3f)', best.model, best.R2), ...
-       'Location','northwest');
-fprintf('Estimated split δ* ≈ %.4f | Low-δ model: %s | R^2 = %.3f\n', delta_star, best.model, best.R2);
+    sprintf('Piecewise Constant Linear'), ...
+    'Location','northwest');
+
+fprintf('Auto δ* ≈ %.4f | Const=%.4f | Tail slope=%.4f | R^2=%.3f\n', ...
+    delta_star, cval, p_lin(1), R2_tail);
