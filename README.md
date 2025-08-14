@@ -1,4 +1,4 @@
-MATLAB implementations for constructing **continuous piecewise-linear (CPWL) δ-approximations** of univariate functions:
+MATLAB implementations for constructing **continuous piecewise-linear δ-approximations** of univariate functions:
 
 ## Algorithm Source
 
